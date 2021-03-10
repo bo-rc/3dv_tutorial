@@ -5,7 +5,7 @@ void MouseEventHandler(int event, int x, int y, int flags, void* param)
     if (event == cv::EVENT_LBUTTONDOWN)
     {
         // Add the point to the given vector
-        std::vector<cv::Point> *points_src = (std::vector<cv::Point> *)param;
+        std::vector<cv::Point> *points_src = static_cast<std::vector<cv::Point> *>(param);
         points_src->push_back(cv::Point(x, y));
         printf("A point (index: %zd) is selected at (%d, %d).\n", points_src->size() - 1, x, y);
     }

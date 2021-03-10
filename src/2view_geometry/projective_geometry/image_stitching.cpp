@@ -1,4 +1,5 @@
 #include "opencv2/opencv.hpp"
+#include <iostream>
 
 int main()
 {
@@ -29,7 +30,13 @@ int main()
 
     cv::Mat merged;
     cv::warpPerspective(image2, merged, H, cv::Size(image1.cols * 2, image1.rows));
-    merged.colRange(0, image1.cols) = image1 * 1; // Copy
+    merged.colRange(0, image1.cols) = image1 * 1; // make a cv::Mat&& -> the effect is Copy
+                                                  // opencv overloaded "=" for several versions
+                                                  // operator * (MatType, otherType) is also overloaded
+                                            // equivalent to:
+
+    // cv::Mat range = merged.colRange(0, image1.cols);
+    // image1.copyTo(range);
 
     // Show the merged image
     cv::Mat original, matched;

@@ -48,10 +48,10 @@ int main()
         // X_.row(2) = 1;
         // cv::Mat x = K * X_;
 
-        // // Add Gaussian noise
-        // cv::Mat noise(2, x.cols, x.type());
-        // cv::randn(noise, cv::Scalar(0), cv::Scalar(noise_std));
-        // x.rowRange(0, 2) = x.rowRange(0, 2) + noise;
+        // Add Gaussian noise
+        cv::Mat noise(2, x.cols, x.type());
+        cv::randn(noise, cv::Scalar(0), cv::Scalar(noise_std));
+        x.rowRange(0, 2) = x.rowRange(0, 2) + noise;
 
         // Show and store the points
         cv::Mat image = cv::Mat::zeros(img_res, CV_8UC1);

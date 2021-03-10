@@ -16,7 +16,7 @@ int main()
     if (gray_ref.channels() > 1) cv::cvtColor(gray_ref, gray_ref, cv::COLOR_RGB2GRAY);
 
     std::vector<cv::Point2f> point_ref;
-    cv::goodFeaturesToTrack(gray_ref, point_ref, 2000, 0.01, 10);
+    cv::goodFeaturesToTrack(gray_ref, point_ref, 2000, 0.01, 10); // LK likes corners (no pure edges)
     if (point_ref.size() < 4)
     {
         video.release();
@@ -47,8 +47,10 @@ int main()
         // Show the original and rectified images together
         for (int i = 0; i < point_ref.size(); i++)
         {
-            if (inlier_mask.at<uchar>(i) > 0) cv::line(image, point_ref[i], point[i], cv::Vec3b(0, 0, 255));
-            else cv::line(image, point_ref[i], point[i], cv::Vec3b(0, 127, 0));
+            if (inlier_mask.at<uchar>(i) > 0) 
+                cv::line(image, point_ref[i], point[i], cv::Vec3b(0, 0, 255));
+            else 
+                cv::line(image, point_ref[i], point[i], cv::Vec3b(0, 127, 0));
         }
         cv::hconcat(image, warp, image);
         cv::imshow("3DV Tutorial: Video Stabilization", image);
