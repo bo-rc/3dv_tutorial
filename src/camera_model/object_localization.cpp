@@ -37,11 +37,29 @@ void MouseEventHandler(int event, int x, int y, int flags, void* param)
     }
 }
 
+struct CamParam {
+    double f, cx, cy;
+    using rotation3d = cv::Point3d;
+    using translation3d = cv::Point3d;
+    rotation3d rot; // rpy
+    translation3d tx; // xyz
+};
+
 int main()
 {
     const char* input = "data/daejeon_station.png";
-    double f = 810.5, cx = 480, cy = 270, L = 3.31;
-    cv::Point3d cam_ori(DEG2RAD(-18.7), DEG2RAD(-8.2), DEG2RAD(2.0));
+    CamParam camera;
+    camera.f = 810.5;
+    camera.cx = 480;
+    camera.cy = 270;
+    camera.rot = {DEG2RAD(-18.7), DEG2RAD(-8.2), DEG2RAD(2.0)};
+    camera.tx = {0.,-3.31,0.}; // aligned to camera coord.:
+                               //  x --> +
+                               // y
+                               // | z:X
+                               // v
+                               // +
+
     cv::Range grid_x(-2, 3), grid_z(5, 35);
 
     // Load an images
@@ -54,19 +72,30 @@ int main()
     cv::setMouseCallback("3DV Tutorial: Object Localization and Measurement", MouseEventHandler, &drag);
 
     // Draw grids on the ground
-    cv::Matx33d K(f, 0, cx, 0, f, cy, 0, 0, 1);
-    cv::Matx33d Rc = Rz(cam_ori.z) * Ry(cam_ori.y) * Rx(cam_ori.x), R = Rc.t();
-    cv::Point3d tc = cv::Point3d(0, -L, 0), t = -Rc.t() * tc;
+    // K: calibration matrix
+    // Rc: camera rotation
+    // Rg: inverse(Rc)
+    // tg: - inverse(Rc) * tc
+    cv::Matx33d K(camera.f, 0, camera.cx, 0, camera.f, camera.cy, 0, 0, 1);
+
+    cv::Matx33d Rc = Rz(camera.rot.z) * Ry(camera.rot.y) * Rx(camera.rot.x);
+    cv::Matx33d Rg = Rc.t();
+    using Translation3d = cv::Point3d;
+    Translation3d tx = camera.tx;
+    Translation3d tg = -Rg * tx;
+
     for (int z = grid_z.start; z <= grid_z.end; z++)
     {
-        cv::Point3d p = K * (R * cv::Point3d(grid_x.start, 0, z) + t);
-        cv::Point3d q = K * (R * cv::Point3d(grid_x.end, 0, z) + t);
+        // project ground line ends to camera coord.
+        cv::Point3d p = K * (Rg * cv::Point3d(grid_x.start, 0, z) + tg);
+        cv::Point3d q = K * (Rg * cv::Point3d(grid_x.end, 0, z) + tg);
         cv::line(image, cv::Point2d(p.x / p.z, p.y / p.z), cv::Point2d(q.x / q.z, q.y / q.z), cv::Vec3b(64, 128, 64), 1);
     }
     for (int x = grid_x.start; x <= grid_x.end; x++)
     {
-        cv::Point3d p = K * (R * cv::Point3d(x, 0, grid_z.start) + t);
-        cv::Point3d q = K * (R * cv::Point3d(x, 0, grid_z.end) + t);
+        // project ground line ends to camera coord.
+        cv::Point3d p = K * (Rg * cv::Point3d(x, 0, grid_z.start) + tg);
+        cv::Point3d q = K * (Rg * cv::Point3d(x, 0, grid_z.end) + tg);
         cv::line(image, cv::Point2d(p.x / p.z, p.y / p.z), cv::Point2d(q.x / q.z, q.y / q.z), cv::Vec3b(64, 128, 64), 1);
     }
 
@@ -76,10 +105,30 @@ int main()
         if (drag.end.x > 0 && drag.end.y > 0)
         {
             // Calculate object location and height
-            cv::Point3d c = Rc * cv::Point3d(drag.start.x - cx, drag.start.y - cy, f);
-            if (c.y < DBL_EPSILON) continue; // Skip the degenerate case (beyond the horizon)
-            cv::Point3d h = Rc * cv::Point3d(drag.end.x - cx, drag.end.y - cy, f);
-            double Z = c.z / c.y * L, X = c.x / c.y * L, H = (c.y / c.z - h.y / h.z) * Z;
+            // unit is pixel
+            //
+            // pt in cam coord.
+            cv::Point3d pt = cv::Point3d(drag.start.x - camera.cx, drag.start.y - camera.cy, camera.f);
+            // pt in world coord.
+            pt = Rc * pt; // camera has only rotation. center aligned to (0,0,0)
+
+            if (pt.y < DBL_EPSILON) 
+                continue; // Skip the degenerate case (beyond the horizon)
+
+            // pt' in cam coord.
+            cv::Point3d pt_prime = cv::Point3d(drag.end.x - camera.cx, drag.end.y - camera.cy, camera.f);
+            // pt' in world coord.
+            pt_prime = Rc * pt_prime;
+
+            if (pt_prime.y < DBL_EPSILON) 
+                continue; // Skip the degenerate case (beyond the horizon)
+
+            double L = -camera.tx.y;
+            
+            double X = pt.x / pt.y * L; // not needed, but true for any point, true for pt
+            double Z = pt.z / pt.y * L; // true for any point, true for pt
+            double Z_prime = pt_prime.z / pt_prime.y * L; // true for pt_prime too
+            double H = L * (Z_prime - Z) / Z_prime; // assuming obj is orthorgonal to ground plane
 
             // Draw head/contact points and location/height
             cv::line(image_copy, drag.start, drag.end, cv::Vec3b(0, 0, 255), 2);
