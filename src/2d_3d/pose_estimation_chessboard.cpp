@@ -1,16 +1,47 @@
 #include "opencv2/opencv.hpp"
 
-int main()
+int main(int argc, char** argv)
 {
-    const char* input = "data/chessboard.avi";
+    cv::String keys =
+        "{help h usage ? |      | print this message   }"
+        "{video  | | video path}"     // optional, video path value ""
+        "{cam  | | webcam id}";       // optional, default value ""
+
+
+    cv::CommandLineParser parser(argc, argv, keys);
+    if (parser.has("help")) {
+        parser.printMessage();
+        return 0;
+    }
+
+    bool hasVideo = parser.has("video");
+    bool hasCam = parser.has("cam");
+    cv::String video_path = parser.get<cv::String>("video"); 
+    int cam_id = parser.get<int>("cam");
+
+
+    if (!parser.check()) {
+        parser.printErrors();
+        return -1;
+    }
+
+    // Open a stream
+    std::unique_ptr<cv::VideoCapture> streamPtr;
+    streamPtr = nullptr;
+    if (hasVideo) {
+        streamPtr = std::make_unique<cv::VideoCapture>(video_path);
+    } else if (hasCam) {
+        streamPtr = std::make_unique<cv::VideoCapture>(cam_id);
+    } else {
+        return 0;
+    }
+
     cv::Matx33d K(432.7390364738057, 0, 476.0614994349778, 0, 431.2395555913084, 288.7602152621297, 0, 0, 1);
     std::vector<double> dist_coeff = { -0.2852754904152874, 0.1016466459919075, -0.0004420196146339175, 0.0001149909868437517, -0.01803978785585194 };
     cv::Size board_pattern(10, 7);
     double board_cellsize = 0.025;
-
-    // Open a video
-    cv::VideoCapture video;
-    if (!video.open(input)) return -1;
+    // cv::Size board_pattern(9, 6);
+    // double board_cellsize = 0.020;
 
     // Prepare a 3D box for simple AR
     std::vector<cv::Point3d> box_lower = { 
@@ -31,11 +62,11 @@ int main()
             obj_points.push_back(cv::Point3d(board_cellsize * c, board_cellsize * r, 0));
 
     // Run pose estimation
-    while (true)
+    while (streamPtr->isOpened())
     {
         // Grab an image from the video
         cv::Mat image;
-        video >> image;
+        *streamPtr >> image;
         if (image.empty()) break;
 
         // Estimate camera pose
@@ -61,8 +92,11 @@ int main()
             cv::Mat R;
             cv::Rodrigues(rvec, R);
             cv::Mat p = -R.t() * tvec;
-            cv::String info = cv::format("XYZ: [%.3f, %.3f, %.3f]", cv::Point3d(p));
-            cv::putText(image, info, cv::Point(5, 15), cv::FONT_HERSHEY_PLAIN, 1, cv::Vec3b(0, 255, 0));
+            std::cout << p << std::endl;
+            // std::cout << R << std::endl;
+            // cv::String info = cv::format("XYZ: [%.3f, %.3f, %.3f]", cv::Point3d(p));
+            cv::String info = cv::format("XYZ: [%.3f, %.3f, %.3f]   Rotation Vec: [%.3f, %.3f, %.3f]", cv::Point3d(p).x, cv::Point3d(p).y, cv::Point3d(p).z, cv::Point3d(rvec).x, cv::Point3d(rvec).y, cv::Point3d(rvec).z);
+            cv::putText(image, info, cv::Point(10, 22), cv::FONT_HERSHEY_PLAIN, 1.5, cv::Vec3b(0, 255, 0));
         }
 
         // Show the image
@@ -71,6 +105,6 @@ int main()
         if (key == 27) break; // 'ESC' key: Exit
     }
 
-    video.release();
+    streamPtr->release();
     return 0;
 }
